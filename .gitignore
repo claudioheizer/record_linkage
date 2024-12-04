@@ -167,3 +167,4 @@ cython_debug/
 *.csv
 *.xlsx
 *.sav
+*.db
