@@ -9,8 +9,9 @@ from tratamento_datatypes import converter_para_int, converter_para_str
 from linkagem import linkar_bases
 
 # Ajusta o ano para as operações abaixo 
-ano = 2023
+ano = 2021
 
+#! 1ª ETAPA
 # Carregando as bases
 df1 = pd.read_spss('base_nb.sav', convert_categoricals=False)
 df2 = pd.read_csv(f'SINASC_{ano}.csv', sep=';', low_memory=False)
@@ -56,6 +57,7 @@ if verificar_coluna(df1, 'puerp_bl2_q15'):
 if verificar_coluna(df1, 'puerp_lu_1'):
     df1 = converter_data_ano(df1, 'puerp_lu_1', 'ANO_NASC')
 
+df1['PESO_NB']= pd.to_numeric(df1['pront_bl17_207'], errors='coerce').floordiv(1).astype('Int64')
 df2['DTNASC'] = pd.to_numeric(df2['DTNASC'], errors='coerce').astype('Int64')
 df2['DTNASCMAE'] = pd.to_numeric(df2['DTNASCMAE'], errors='coerce').astype('Int64')
 
@@ -106,7 +108,7 @@ df_linkado['DT_NASCMAE_NB_v'] = df_linkado['DT_NASCMAE_NB']
 df_linkado['DTNASCMAE_v'] = df_linkado['DTNASCMAE']
 df_linkado['CNES_v'] = df_linkado['CNES']
 df_linkado['CODESTAB_v'] = df_linkado['CODESTAB']
-df_linkado['PESO_NB_v'] = df_linkado['pront_bl17_207']
+df_linkado['PESO_NB_v'] = df_linkado['PESO_NB']
 df_linkado['PESO_v'] = df_linkado['PESO']
 
 # Separa as duplicidades em df_linkado
@@ -126,7 +128,77 @@ print(f"Número de registros com uma única correspondência: {num_unicos}")
 print(f"Número de registros com duplicidades de correspondência: {num_duplicidades}")
 print(f"Número de registros não linkados: {num_nao_linkados}")
 
-# Salva resumo 
+#! 2ª ETAPA
+# Verifica A correspondência entre 'PESO_NB' e 'PESO' nas duplicidades
+df_linkado_duplicidades_corrigido = df_linkado_duplicidades[df_linkado_duplicidades['PESO_NB'] == df_linkado_duplicidades['PESO']]
+
+# Apensa as correspondências ao DataFrame de únicos e remove da lista de duplicidades
+df_linkado_unicos = pd.concat([df_linkado_unicos, df_linkado_duplicidades_corrigido], ignore_index=True)
+df_linkado_duplicidades = df_linkado_duplicidades[df_linkado_duplicidades['PESO_NB'] != df_linkado_duplicidades['PESO']]
+
+# Salvar df_nao_linkado no banco de dados SQLite
+df_nao_linkado.to_sql('df_nao_linkado', conn, index=False, if_exists='replace')
+
+# Merge baseado em 'PESO_NB' e 'PESO' no df_nao_linkado
+query_peso = """
+    SELECT 
+        df_nao_linkado.*,
+        df2_filtrado.*
+    FROM 
+        df_nao_linkado
+    INNER JOIN 
+        df2_filtrado
+    ON 
+        df_nao_linkado.DT_NASC_NB = df2_filtrado.DTNASC AND
+        df_nao_linkado.DT_NASCMAE_NB = df2_filtrado.DTNASCMAE AND
+        df_nao_linkado.PESO_NB = df2_filtrado.PESO
+"""
+
+df_linkado_peso = pd.read_sql_query(query_peso, conn)
+
+# Cria um conjunto de IDs presentes em df_linkado
+ids_linkados_peso = set(df_linkado_peso['Codigo_Unico'].dropna())
+
+# Identifica registros em df1_filtrado que não foram linkados
+df_nao_linkado_peso = df_nao_linkado[~df_nao_linkado['Codigo_Unico'].isin(ids_linkados_peso)]
+
+# Separa as duplicidades em df_linkado
+duplicados = df_linkado_peso.duplicated(subset=['Codigo_Unico'], keep=False)
+df_linkado_peso_unicos = df_linkado_peso[~duplicados]  # Registros sem duplicatas
+df_linkado_peso_duplicidades = df_linkado_peso[duplicados]  # Registros com duplicatas
+
+# Contar o número de elementos em cada planilha
+num_filtrados = df_nao_linkado.shape[0]
+num_unicos = df_linkado_peso_unicos.shape[0]
+num_duplicidades = df_linkado_peso_duplicidades.shape[0]
+num_nao_linkados = df_nao_linkado_peso.shape[0]
+
+# Exibir os resultados
+print(f"Número de mulheres na base NB no ano de {ano}: {num_filtrados}")
+print(f"Número de registros com uma única correspondência: {num_unicos}")
+print(f"Número de registros com duplicidades de correspondência: {num_duplicidades}")
+print(f"Número de registros não linkados: {num_nao_linkados}")
+
+# Consolidar linkados após as etapas
+df_linkado_unicos = pd.concat([df_linkado_unicos, df_linkado_peso_unicos], ignore_index=True)
+df_linkado_duplicidades = pd.concat([df_linkado_duplicidades, df_linkado_peso_duplicidades], ignore_index=True)
+
+# Atualizar df_nao_linkado final
+df_nao_linkado = df_nao_linkado_peso
+
+# Contar o número de elementos finais
+num_filtrados = df1_filtrado.shape[0]
+num_unicos = df_linkado_unicos.shape[0]
+num_duplicidades = df_linkado_duplicidades.shape[0]
+num_nao_linkados = df_nao_linkado.shape[0]
+
+# Exibir os resultados finais
+print(f"Número de mulheres na base NB no ano de {ano}: {num_filtrados}")
+print(f"Número de registros com uma única correspondência: {num_unicos}")
+print(f"Número de registros com duplicidades de correspondência: {num_duplicidades}")
+print(f"Número de registros não linkados: {num_nao_linkados}")
+
+# Salva resumo consolidado
 resumo = pd.DataFrame({
     'Categoria': [
         f'Mulheres no NB no de {ano}',
@@ -144,7 +216,7 @@ resumo = pd.DataFrame({
 
 resumo.to_excel(f'{ano} - resumo.xlsx', index=False)
 
-# Salva os resultados
+# Salva os resultados finais
 df_linkado_unicos.to_csv(f'{ano} - linkados_unicos.csv', index=False, sep=';', encoding='utf-8')
 df_linkado_duplicidades.to_csv(f'{ano} - linkados_duplicidades.csv', index=False, sep=';', encoding='utf-8')
 df_nao_linkado.to_csv(f'{ano} - nao_linkados.csv', index=False, sep=';', encoding='utf-8')
@@ -156,4 +228,3 @@ print(f"Available Memory: {memory.available / (1024**3):.2f} GB")
 
 # Fechar conexão com o banco de dados
 conn.close()
-
