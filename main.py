@@ -9,16 +9,16 @@ from tratamento_datatypes import converter_para_int, converter_para_str
 from linkagem import linkar_bases
 
 # Ajusta o ano para as operações abaixo 
-ano = 2024
+ano = 2022
 
 # Carregando as bases
 df1 = pd.read_spss('base_nb.sav', convert_categoricals=False)
 df2 = pd.read_csv(f'SINASC_{ano}.csv', sep=';', low_memory=False)
 
+df1 = df1.iloc[:, 0:99]
+
 for col in df1.columns:
     print(col)
-
-df1 = df1.iloc[:, 0:76]
 
 # Função para verificar a existência de coluna no DataFrame
 def verificar_coluna(df, coluna):
@@ -35,7 +35,7 @@ if verificar_coluna(df1, 'puerp_bl2_q15'):
     df1 = converter_data_ddmmyyyy(df1, 'puerp_bl2_q15', 'DT_NASCMAE_NB')
 
 if verificar_coluna(df1, 'puerp_lu_1'):
-    df1 = converter_data_ano(df1, 'puerp_lu_1', 'ANO')
+    df1 = converter_data_ano(df1, 'puerp_lu_1', 'ANO_NASC')
 
 df2['DTNASC'] = pd.to_numeric(df2['DTNASC'], errors='coerce').astype('Int64')
 df2['DTNASCMAE'] = pd.to_numeric(df2['DTNASCMAE'], errors='coerce').astype('Int64')
@@ -47,7 +47,7 @@ if verificar_coluna(df1, 'Hosp'):
 df2['CODESTAB'] = pd.to_numeric(df2['CODESTAB'], errors='coerce').astype('Int64')
 
 # Filtragem de dados
-df1_filtrado = df1[df1['ANO'] == ano]
+df1_filtrado = df1[df1['ANO_NASC'] == ano]
 df2_filtrado = df2[df2['CODESTAB'].isin(df1['CNES'])]
 
 # Cria e conecta ao banco SQLite local
@@ -129,7 +129,7 @@ df_linkado_duplicidades.to_csv(f'{ano} - linkados_duplicidades.csv', index=False
 df_nao_linkado.to_csv(f'{ano} - nao_linkados.csv', index=False, sep=';', encoding='utf-8')
 
 # Exibe o uso de memória
-memory = virtual_memory()
+memory = psutil.virtual_memory()
 print(f"Total Memory: {memory.total / (1024**3):.2f} GB")
 print(f"Available Memory: {memory.available / (1024**3):.2f} GB")
 
