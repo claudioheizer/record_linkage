@@ -9,14 +9,33 @@ from tratamento_datatypes import converter_para_int, converter_para_str
 from linkagem import linkar_bases
 
 # Ajusta o ano para as operações abaixo 
-ano = 2022
+ano = 2023
 
 # Carregando as bases
 df1 = pd.read_spss('base_nb.sav', convert_categoricals=False)
 df2 = pd.read_csv(f'SINASC_{ano}.csv', sep=';', low_memory=False)
 
-df1 = df1.iloc[:, 0:99]
+# Lista das colunas desejadas
+variables = ["Hosp", "record_id", "Codigo_Unico", "codmunnasc", "NomeMunic", "Ano", 
+             "puerp_lu_1", "puerp_bl2_q15", "pront_bl17_207"]
 
+# Filtra as colunas pela lista em variables, confirmando sua existência no dataframe
+existing_columns = [col for col in variables if col in df1.columns]
+
+# Identificar colunas ausentes
+missing_columns = [col for col in variables if col not in df1.columns]
+
+# Exibe aviso de colunas ausentes (se houver)
+if missing_columns:
+    print(f"As seguintes colunas estão ausentes no DataFrame: {missing_columns}")
+
+# Selecionar apenas as colunas existentes
+df1 = df1[existing_columns]
+
+# Abordagem inespecífica anterior
+# df1 = df1.iloc[:, 0:99]
+
+# Conferência das operações acima
 for col in df1.columns:
     print(col)
 
@@ -75,10 +94,10 @@ query = """
 df_linkado = pd.read_sql_query(query, conn)
 
 # Cria um conjunto de IDs presentes em df_linkado
-ids_linkados = set(df_linkado['puerp_record_id_2'].dropna())
+ids_linkados = set(df_linkado['Codigo_Unico'].dropna())
 
 # Identifica registros em df1_filtrado que não foram linkados
-df_nao_linkado = df1_filtrado[~df1_filtrado['puerp_record_id_2'].isin(ids_linkados)]
+df_nao_linkado = df1_filtrado[~df1_filtrado['Codigo_Unico'].isin(ids_linkados)]
 
 # Copia e adiciona colunas com sufixo _v a fim para verificação
 df_linkado['DT_NASC_NB_v'] = df_linkado['DT_NASC_NB']
@@ -87,9 +106,11 @@ df_linkado['DT_NASCMAE_NB_v'] = df_linkado['DT_NASCMAE_NB']
 df_linkado['DTNASCMAE_v'] = df_linkado['DTNASCMAE']
 df_linkado['CNES_v'] = df_linkado['CNES']
 df_linkado['CODESTAB_v'] = df_linkado['CODESTAB']
+df_linkado['PESO_NB_v'] = df_linkado['pront_bl17_207']
+df_linkado['PESO_v'] = df_linkado['PESO']
 
 # Separa as duplicidades em df_linkado
-duplicados = df_linkado.duplicated(subset=['puerp_record_id_2'], keep=False)
+duplicados = df_linkado.duplicated(subset=['Codigo_Unico'], keep=False)
 df_linkado_unicos = df_linkado[~duplicados]  # Registros sem duplicatas
 df_linkado_duplicidades = df_linkado[duplicados]  # Registros com duplicatas
 
