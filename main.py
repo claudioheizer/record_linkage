@@ -9,7 +9,7 @@ from tratamento_datatypes import converter_para_int, converter_para_str
 from linkagem import linkar_bases
 
 # Ajusta o ano para as operações abaixo 
-ano = 2021
+ano = 2022
 
 #! 1ª ETAPA
 # Carregando as bases
@@ -17,8 +17,8 @@ df1 = pd.read_spss('base_nb.sav', convert_categoricals=False)
 df2 = pd.read_csv(f'SINASC_{ano}.csv', sep=';', low_memory=False)
 
 # Lista das colunas desejadas
-variables = ["Hosp", "record_id", "Codigo_Unico", "codmunnasc", "NomeMunic", "Ano", 
-             "puerp_lu_1", "puerp_bl2_q15", "pront_bl17_207"]
+variables = ["Hosp", "record_id", "Codigo_Unico", "codmunnasc", "NomeMunic", 
+             "Ano", "puerp_lu_1", "puerp_bl2_q15", "pront_bl17_207"]
 
 # Filtra as colunas pela lista em variables, confirmando sua existência no dataframe
 existing_columns = [col for col in variables if col in df1.columns]
@@ -138,20 +138,21 @@ df_linkado_duplicidades = df_linkado_duplicidades[df_linkado_duplicidades['PESO_
 
 # Salvar df_nao_linkado no banco de dados SQLite
 df_nao_linkado.to_sql('df_nao_linkado', conn, index=False, if_exists='replace')
+df2.to_sql('df2', conn, index=False, if_exists='replace')
 
 # Merge baseado em 'PESO_NB' e 'PESO' no df_nao_linkado
 query_peso = """
     SELECT 
         df_nao_linkado.*,
-        df2_filtrado.*
+        df2.*
     FROM 
         df_nao_linkado
     INNER JOIN 
-        df2_filtrado
+        df2
     ON 
-        df_nao_linkado.DT_NASC_NB = df2_filtrado.DTNASC AND
-        df_nao_linkado.DT_NASCMAE_NB = df2_filtrado.DTNASCMAE AND
-        df_nao_linkado.PESO_NB = df2_filtrado.PESO
+        df_nao_linkado.DT_NASC_NB = df2.DTNASC AND
+        df_nao_linkado.DT_NASCMAE_NB = df2.DTNASCMAE AND
+        df_nao_linkado.PESO_NB = df2.PESO
 """
 
 df_linkado_peso = pd.read_sql_query(query_peso, conn)
