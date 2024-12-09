@@ -2,6 +2,8 @@ import pandas as pd
 import sqlite3
 import psutil
 import openpyxl
+from tratamento_nb import get_nb
+from tratamento_mmg import get_mmg
 from tratamento_nomes import tratar_campo_nome, criar_novonome_primeiro_ultimo, criar_novonome_primeiros_tres
 from tratamento_datas import converter_data_string, converter_data_ddmmyyyy, converter_data_ano
 from tratamento_cnes import tratar_cnes
@@ -10,35 +12,13 @@ from linkagem import linkar_bases
 
 # Ajusta o ano para as operações abaixo 
 ano = 2022
+base = 'mmg'
 
 #! 1ª ETAPA
 # Carregando as bases
-df1 = pd.read_spss('base_nb.sav', convert_categoricals=False)
+# df1 = get_nb('base_nb.sav')
+df1 = get_mmg('mmg_base.csv')
 df2 = pd.read_csv(f'SINASC_{ano}.csv', sep=';', low_memory=False)
-
-# Lista das colunas desejadas
-variables = ["Hosp", "record_id", "Codigo_Unico", "codmunnasc", "NomeMunic", 
-             "Ano", "puerp_lu_1", "puerp_bl2_q15", "pront_bl17_207"]
-
-# Filtra as colunas pela lista em variables, confirmando sua existência no dataframe
-existing_columns = [col for col in variables if col in df1.columns]
-
-# Identificar colunas ausentes
-missing_columns = [col for col in variables if col not in df1.columns]
-
-# Exibe aviso de colunas ausentes (se houver)
-if missing_columns:
-    print(f"As seguintes colunas estão ausentes no DataFrame: {missing_columns}")
-
-# Selecionar apenas as colunas existentes
-df1 = df1[existing_columns]
-
-# Abordagem inespecífica anterior
-# df1 = df1.iloc[:, 0:99]
-
-# Conferência das operações acima
-for col in df1.columns:
-    print(col)
 
 # Função para verificar a existência de coluna no DataFrame
 def verificar_coluna(df, coluna):
@@ -48,22 +28,22 @@ def verificar_coluna(df, coluna):
     return True
 
 # Tratamento de datas
-if verificar_coluna(df1, 'puerp_lu_1'):
-    df1 = converter_data_ddmmyyyy(df1, 'puerp_lu_1', 'DT_NASC_NB')
+if verificar_coluna(df1, 'dt_nasc_bebe'):
+    df1 = converter_data_ddmmyyyy(df1, 'dt_nasc_bebe', 'DT_NASC_NB')
 
-if verificar_coluna(df1, 'puerp_bl2_q15'):
-    df1 = converter_data_ddmmyyyy(df1, 'puerp_bl2_q15', 'DT_NASCMAE_NB')
+if verificar_coluna(df1, 'dt_nasc_mae'):
+    df1 = converter_data_ddmmyyyy(df1, 'dt_nasc_mae', 'DT_NASCMAE_NB')
 
-if verificar_coluna(df1, 'puerp_lu_1'):
-    df1 = converter_data_ano(df1, 'puerp_lu_1', 'ANO_NASC')
+if verificar_coluna(df1, 'dt_nasc_bebe'):
+    df1 = converter_data_ano(df1, 'dt_nasc_bebe', 'ANO_NASC')
 
-df1['PESO_NB']= pd.to_numeric(df1['pront_bl17_207'], errors='coerce').floordiv(1).astype('Int64')
+df1['PESO_NB']= pd.to_numeric(df1['peso_bebe'], errors='coerce').floordiv(1).astype('Int64')
 df2['DTNASC'] = pd.to_numeric(df2['DTNASC'], errors='coerce').astype('Int64')
 df2['DTNASCMAE'] = pd.to_numeric(df2['DTNASCMAE'], errors='coerce').astype('Int64')
 
 # Tratamento de cnes
-if verificar_coluna(df1, 'Hosp'):
-    df1 = tratar_cnes(df1, 'Hosp', 'CNES')
+if verificar_coluna(df1, 'hosp'):
+    df1 = tratar_cnes(df1, 'hosp', 'CNES')
 
 df2['CODESTAB'] = pd.to_numeric(df2['CODESTAB'], errors='coerce').astype('Int64')
 
@@ -96,10 +76,10 @@ query = """
 df_linkado = pd.read_sql_query(query, conn)
 
 # Cria um conjunto de IDs presentes em df_linkado
-ids_linkados = set(df_linkado['Codigo_Unico'].dropna())
+ids_linkados = set(df_linkado['cod_unico'].dropna())
 
 # Identifica registros em df1_filtrado que não foram linkados
-df_nao_linkado = df1_filtrado[~df1_filtrado['Codigo_Unico'].isin(ids_linkados)]
+df_nao_linkado = df1_filtrado[~df1_filtrado['cod_unico'].isin(ids_linkados)]
 
 # Copia e adiciona colunas com sufixo _v a fim para verificação
 df_linkado['DT_NASC_NB_v'] = df_linkado['DT_NASC_NB']
@@ -112,7 +92,7 @@ df_linkado['PESO_NB_v'] = df_linkado['PESO_NB']
 df_linkado['PESO_v'] = df_linkado['PESO']
 
 # Separa as duplicidades em df_linkado
-duplicados = df_linkado.duplicated(subset=['Codigo_Unico'], keep=False)
+duplicados = df_linkado.duplicated(subset=['cod_unico'], keep=False)
 df_linkado_unicos = df_linkado[~duplicados]  # Registros sem duplicatas
 df_linkado_duplicidades = df_linkado[duplicados]  # Registros com duplicatas
 
@@ -158,13 +138,13 @@ query_peso = """
 df_linkado_peso = pd.read_sql_query(query_peso, conn)
 
 # Cria um conjunto de IDs presentes em df_linkado
-ids_linkados_peso = set(df_linkado_peso['Codigo_Unico'].dropna())
+ids_linkados_peso = set(df_linkado_peso['cod_unico'].dropna())
 
 # Identifica registros em df1_filtrado que não foram linkados
-df_nao_linkado_peso = df_nao_linkado[~df_nao_linkado['Codigo_Unico'].isin(ids_linkados_peso)]
+df_nao_linkado_peso = df_nao_linkado[~df_nao_linkado['cod_unico'].isin(ids_linkados_peso)]
 
 # Separa as duplicidades em df_linkado
-duplicados = df_linkado_peso.duplicated(subset=['Codigo_Unico'], keep=False)
+duplicados = df_linkado_peso.duplicated(subset=['cod_unico'], keep=False)
 df_linkado_peso_unicos = df_linkado_peso[~duplicados]  # Registros sem duplicatas
 df_linkado_peso_duplicidades = df_linkado_peso[duplicados]  # Registros com duplicatas
 
@@ -202,7 +182,7 @@ print(f"Número de registros não linkados: {num_nao_linkados}")
 # Salva resumo consolidado
 resumo = pd.DataFrame({
     'Categoria': [
-        f'Mulheres no NB no de {ano}',
+        f'Mulheres no {base} no ano de {ano}',
         'Registros com única correspondência', 
         'Registros com duplicidade de correspondência', 
         'Registros não linkados',     
@@ -215,12 +195,12 @@ resumo = pd.DataFrame({
     ]
 })
 
-resumo.to_excel(f'{ano} - resumo.xlsx', index=False)
+resumo.to_excel(f'{ano}_{base} - resumo.xlsx', index=False)
 
 # Salva os resultados finais
-df_linkado_unicos.to_csv(f'{ano} - linkados_unicos.csv', index=False, sep=';', encoding='utf-8')
-df_linkado_duplicidades.to_csv(f'{ano} - linkados_duplicidades.csv', index=False, sep=';', encoding='utf-8')
-df_nao_linkado.to_csv(f'{ano} - nao_linkados.csv', index=False, sep=';', encoding='utf-8')
+df_linkado_unicos.to_csv(f'{ano}_{base} - linkados_unicos.csv', index=False, sep=';', encoding='utf-8')
+df_linkado_duplicidades.to_csv(f'{ano}_{base} - linkados_duplicidades.csv', index=False, sep=';', encoding='utf-8')
+df_nao_linkado.to_csv(f'{ano}_{base} - nao_linkados.csv', index=False, sep=';', encoding='utf-8')
 
 # Exibe o uso de memória
 memory = psutil.virtual_memory()
