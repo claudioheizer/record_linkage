@@ -11,7 +11,7 @@ from tratamento_datatypes import converter_para_int, converter_para_str
 from linkagem import linkar_bases
 
 # Ajusta o ano para as operações abaixo 
-ano = 2022
+ano = 2024
 base = 'mmg'
 
 #! 1ª ETAPA
